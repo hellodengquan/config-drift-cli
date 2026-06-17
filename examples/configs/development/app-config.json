@@ -1,0 +1,53 @@
+{
+  "app": {
+    "name": "电商平台(开发)",
+    "version": "2.2.0-dev",
+    "port": 3000,
+    "debug": true
+  },
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "name": "ecommerce_dev",
+    "pool": {
+      "min": 1,
+      "max": 5,
+      "idleTimeout": 60000
+    }
+  },
+  "redis": {
+    "host": "localhost",
+    "port": 6379,
+    "db": 2,
+    "cacheTTL": 600
+  },
+  "security": {
+    "sessionTimeout": 7200,
+    "maxLoginAttempts": 100,
+    "passwordMinLength": 4,
+    "enable2FA": false
+  },
+  "auth": {
+    "jwtSecret": "dev-jwt-secret",
+    "tokenExpiry": 86400,
+    "refreshTokenExpiry": 604800
+  },
+  "feature": {
+    "newCheckout": true,
+    "aiRecommend": false,
+    "darkMode": true,
+    "multiLanguage": false,
+    "betaFeature": true
+  },
+  "logging": {
+    "level": "debug",
+    "filePath": "./logs/app-dev.log",
+    "maxSize": "10MB",
+    "maxFiles": 3
+  },
+  "ui": {
+    "theme": "dark",
+    "pageSize": 10,
+    "defaultLanguage": "zh-CN"
+  }
+}

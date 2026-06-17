@@ -1,0 +1,115 @@
+{
+  "storagePath": ".cdrift",
+  "environments": ["production", "staging", "development"],
+  "defaultRiskRules": [
+    {
+      "pathPattern": "database.**",
+      "level": "critical",
+      "description": "数据库配置变更"
+    },
+    {
+      "pathPattern": "redis.**",
+      "level": "high",
+      "description": "Redis 配置变更"
+    },
+    {
+      "pathPattern": "security.**",
+      "level": "critical",
+      "description": "安全配置变更"
+    },
+    {
+      "pathPattern": "auth.**",
+      "level": "high",
+      "description": "认证配置变更"
+    },
+    {
+      "pathPattern": "feature.*",
+      "level": "medium",
+      "description": "功能开关变更"
+    },
+    {
+      "pathPattern": "logging.**",
+      "level": "low",
+      "description": "日志配置变更"
+    },
+    {
+      "pathPattern": "ui.**",
+      "level": "info",
+      "description": "UI 配置变更"
+    }
+  ],
+  "sources": [
+    {
+      "id": "app-config-prod",
+      "name": "应用配置(生产)",
+      "type": "file",
+      "format": "json",
+      "path": "examples/configs/production/app-config.json",
+      "environment": "production",
+      "description": "生产环境应用主配置"
+    },
+    {
+      "id": "app-config-staging",
+      "name": "应用配置(预发布)",
+      "type": "file",
+      "format": "json",
+      "path": "examples/configs/staging/app-config.json",
+      "environment": "staging",
+      "description": "预发布环境应用主配置"
+    },
+    {
+      "id": "app-config-dev",
+      "name": "应用配置(开发)",
+      "type": "file",
+      "format": "json",
+      "path": "examples/configs/development/app-config.json",
+      "environment": "development",
+      "description": "开发环境应用主配置"
+    },
+    {
+      "id": "env-prod",
+      "name": "环境变量(生产)",
+      "type": "file",
+      "format": "env",
+      "path": "examples/configs/production/.env",
+      "environment": "production",
+      "description": "生产环境环境变量"
+    },
+    {
+      "id": "env-staging",
+      "name": "环境变量(预发布)",
+      "type": "file",
+      "format": "env",
+      "path": "examples/configs/staging/.env",
+      "environment": "staging",
+      "description": "预发布环境环境变量"
+    },
+    {
+      "id": "feature-flags-prod",
+      "name": "功能开关(生产)",
+      "type": "file",
+      "format": "yaml",
+      "path": "examples/configs/production/features.yaml",
+      "environment": "production",
+      "description": "生产环境功能开关配置"
+    },
+    {
+      "id": "feature-flags-staging",
+      "name": "功能开关(预发布)",
+      "type": "file",
+      "format": "yaml",
+      "path": "examples/configs/staging/features.yaml",
+      "environment": "staging",
+      "description": "预发布环境功能开关配置"
+    },
+    {
+      "id": "system-env",
+      "name": "系统环境变量",
+      "type": "env",
+      "format": "json",
+      "path": "CDRIFT_",
+      "environment": "development",
+      "description": "以 CDRIFT_ 开头的系统环境变量"
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "app": {
+    "name": "电商平台",
+    "version": "2.1.0",
+    "port": 8080,
+    "debug": true
+  },
+  "database": {
+    "host": "db-staging.example.com",
+    "port": 5432,
+    "name": "ecommerce_staging",
+    "pool": {
+      "min": 2,
+      "max": 10,
+      "idleTimeout": 60000
+    }
+  },
+  "redis": {
+    "host": "redis-staging.example.com",
+    "port": 6379,
+    "db": 1,
+    "cacheTTL": 1800
+  },
+  "security": {
+    "sessionTimeout": 3600,
+    "maxLoginAttempts": 10,
+    "passwordMinLength": 6,
+    "enable2FA": false
+  },
+  "auth": {
+    "jwtSecret": "staging-jwt-secret-2024",
+    "tokenExpiry": 7200,
+    "refreshTokenExpiry": 172800
+  },
+  "feature": {
+    "newCheckout": true,
+    "aiRecommend": true,
+    "darkMode": true,
+    "multiLanguage": true
+  },
+  "logging": {
+    "level": "debug",
+    "filePath": "/var/log/app-staging.log",
+    "maxSize": "50MB",
+    "maxFiles": 5
+  },
+  "ui": {
+    "theme": "dark",
+    "pageSize": 10,
+    "defaultLanguage": "zh-CN"
+  }
+}

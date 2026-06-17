@@ -1,0 +1,31 @@
+featureFlags:
+  newCheckout:
+    enabled: false
+    description: 新版结账流程
+    rollout: 0
+  aiRecommend:
+    enabled: true
+    description: AI 商品推荐
+    rollout: 100
+  darkMode:
+    enabled: false
+    description: 暗色主题
+    rollout: 0
+  multiLanguage:
+    enabled: true
+    description: 多语言支持
+    rollout: 100
+  expressDelivery:
+    enabled: false
+    description: 加急配送
+    rollout: 0
+  socialLogin:
+    enabled: true
+    description: 第三方登录
+    rollout: 100
+  wishlist:
+    enabled: true
+    description: 心愿单功能
+    rollout: 80
+version: "1.0.0"
+lastUpdated: "2024-06-01T00:00:00Z"
