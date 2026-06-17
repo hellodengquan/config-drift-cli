@@ -86,6 +86,7 @@ interface CompareOptions {
   ignorePaths?: string[];
   arrayOrderSensitive?: boolean;
   arrayOrderSensitivePaths?: string[];
+  normalizeTypes?: boolean;
 }
 
 export function compareSnapshots(
@@ -93,7 +94,7 @@ export function compareSnapshots(
   currentSnapshot: ConfigSnapshot,
   options: CompareOptions
 ): DriftItem[] {
-  const { riskRules, ignorePaths, arrayOrderSensitive = false, arrayOrderSensitivePaths = [] } = options;
+  const { riskRules, ignorePaths, arrayOrderSensitive = false, arrayOrderSensitivePaths = [], normalizeTypes = true } = options;
   const drifts: DriftItem[] = [];
   
   if (baselineSnapshot.sourceId !== currentSnapshot.sourceId) {
@@ -106,7 +107,8 @@ export function compareSnapshots(
   const normalizeOptions = {
     sortKeys: true,
     arrayOrderSensitive,
-    arrayOrderSensitivePaths
+    arrayOrderSensitivePaths,
+    normalizeTypes
   };
 
   const baselineNormalized = normalizeData(baselineFiltered, normalizeOptions);

@@ -1,52 +1,52 @@
 {
-  "ui": {
-    "defaultLanguage": "zh-CN",
-    "pageSize": 20,
-    "theme": "light"
-  },
-  "logging": {
-    "maxFiles": 10,
-    "maxSize": "100MB",
-    "filePath": "/var/log/app.log",
-    "level": "warn"
-  },
-  "feature": {
-    "multiLanguage": true,
-    "darkMode": false,
-    "aiRecommend": true,
-    "newCheckout": false
-  },
-  "auth": {
-    "refreshTokenExpiry": 86400,
-    "tokenExpiry": 3600,
-    "jwtSecret": "prod-jwt-secret-2024"
-  },
-  "security": {
-    "enable2FA": true,
-    "passwordMinLength": 8,
-    "maxLoginAttempts": 5,
-    "sessionTimeout": 1800
-  },
-  "redis": {
-    "cacheTTL": 3600,
-    "db": 0,
-    "port": 6379,
-    "host": "redis-prod.example.com"
+  "app": {
+    "name": "电商平台",
+    "version": "2.1.0",
+    "port": 8080,
+    "debug": false
   },
   "database": {
-    "pool": {
-      "idleTimeout": 30000,
-      "max": 20,
-      "min": 5
-    },
-    "name": "ecommerce",
+    "host": "db-prod.example.com",
     "port": 5432,
-    "host": "db-prod-new.example.com"
+    "name": "ecommerce",
+    "pool": {
+      "min": 5,
+      "max": 20,
+      "idleTimeout": 30000
+    }
   },
-  "app": {
-    "debug": false,
-    "port": 8080,
-    "version": "2.1.0",
-    "name": "电商平台"
+  "redis": {
+    "host": "redis-prod.example.com",
+    "port": 6379,
+    "db": 0,
+    "cacheTTL": 3600
+  },
+  "security": {
+    "sessionTimeout": 1800,
+    "maxLoginAttempts": 5,
+    "passwordMinLength": 8,
+    "enable2FA": true
+  },
+  "auth": {
+    "jwtSecret": "prod-jwt-secret-2024",
+    "tokenExpiry": 3600,
+    "refreshTokenExpiry": 86400
+  },
+  "feature": {
+    "newCheckout": false,
+    "aiRecommend": true,
+    "darkMode": false,
+    "multiLanguage": true
+  },
+  "logging": {
+    "level": "warn",
+    "filePath": "/var/log/app.log",
+    "maxSize": "100MB",
+    "maxFiles": 10
+  },
+  "ui": {
+    "theme": "light",
+    "pageSize": 20,
+    "defaultLanguage": "zh-CN"
   }
 }

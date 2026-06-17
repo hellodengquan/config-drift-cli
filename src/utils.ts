@@ -131,8 +131,80 @@ export function deepSortObjectKeys(obj: any): any {
   return sortedObj;
 }
 
+export function normalizeLiteral(value: any): any {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'number') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    if (value === 'true' || value === 'True' || value === 'TRUE' || value === 'yes' || value === 'Yes' || value === 'YES' || value === 'on' || value === 'On' || value === 'ON') {
+      return true;
+    }
+    if (value === 'false' || value === 'False' || value === 'FALSE' || value === 'no' || value === 'No' || value === 'NO' || value === 'off' || value === 'Off' || value === 'OFF') {
+      return false;
+    }
+    if (value === 'null' || value === 'Null' || value === 'NULL' || value === '~' || value === '') {
+      return null;
+    }
+
+    if (/^-?\d+$/.test(value)) {
+      const num = parseInt(value, 10);
+      if (Number.isSafeInteger(num) && String(num) === value) {
+        return num;
+      }
+    }
+
+    if (/^-?\d+\.\d+$/.test(value)) {
+      const num = parseFloat(value);
+      if (Number.isFinite(num)) {
+        return num;
+      }
+    }
+
+    if (/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(value)) {
+      const num = Number(value);
+      if (Number.isFinite(num)) {
+        return num;
+      }
+    }
+
+    return value;
+  }
+
+  return value;
+}
+
+export function deepNormalizeLiterals(obj: any): any {
+  if (obj === null || obj === undefined) {
+    return null;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(item => deepNormalizeLiterals(item));
+  }
+
+  if (typeof obj === 'object') {
+    const result: Record<string, any> = {};
+    for (const key of Object.keys(obj)) {
+      result[key] = deepNormalizeLiterals(obj[key]);
+    }
+    return result;
+  }
+
+  return normalizeLiteral(obj);
+}
+
 export function getContentSignature(value: any): string {
-  const sorted = deepSortObjectKeys(value);
+  const normalized = deepNormalizeLiterals(value);
+  const sorted = deepSortObjectKeys(normalized);
   const jsonStr = JSON.stringify(sorted);
   return generateChecksum(jsonStr);
 }
@@ -149,6 +221,7 @@ export interface NormalizeOptions {
   sortKeys?: boolean;
   arrayOrderSensitive?: boolean;
   arrayOrderSensitivePaths?: string[];
+  normalizeTypes?: boolean;
   currentPath?: string;
 }
 
@@ -157,10 +230,18 @@ export function normalizeData(data: any, options: NormalizeOptions = {}): any {
     sortKeys = true,
     arrayOrderSensitive = false,
     arrayOrderSensitivePaths = [],
+    normalizeTypes = true,
     currentPath = ''
   } = options;
 
-  if (data === null || typeof data !== 'object') {
+  if (data === null || data === undefined) {
+    return null;
+  }
+
+  if (typeof data !== 'object') {
+    if (normalizeTypes) {
+      return normalizeLiteral(data);
+    }
     return data;
   }
 
@@ -176,6 +257,7 @@ export function normalizeData(data: any, options: NormalizeOptions = {}): any {
         sortKeys,
         arrayOrderSensitive,
         arrayOrderSensitivePaths,
+        normalizeTypes,
         currentPath: `${currentPath}.${index}`
       })
     );
@@ -196,6 +278,7 @@ export function normalizeData(data: any, options: NormalizeOptions = {}): any {
       sortKeys,
       arrayOrderSensitive,
       arrayOrderSensitivePaths,
+      normalizeTypes,
       currentPath: newPath
     });
   }
@@ -204,6 +287,7 @@ export function normalizeData(data: any, options: NormalizeOptions = {}): any {
 }
 
 export function canonicalJson(obj: any): string {
-  const normalized = deepSortObjectKeys(obj);
-  return JSON.stringify(normalized);
+  const normalized = deepNormalizeLiterals(obj);
+  const sorted = deepSortObjectKeys(normalized);
+  return JSON.stringify(sorted);
 }
