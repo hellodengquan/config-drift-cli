@@ -206,6 +206,8 @@ program
   .option('-o, --output <path>', '输出报告到指定文件 (支持 .json 和 .md 格式)')
   .option('-f, --format <format>', '输出格式: json|md|console', 'console')
   .option('--fail-on <level>', '存在该等级及以上漂移时退出码为 1 (用于 CI)')
+  .option('--array-order-sensitive', '数组顺序敏感模式 (视为语义差异)')
+  .option('--no-array-order-sensitive', '数组顺序不敏感模式 (忽略顺序差异，默认)')
   .action(async (cmdOpts) => {
     try {
       const options = program.opts();
@@ -215,7 +217,17 @@ program
         ? [cmdOpts.environment]
         : config.environments;
       
+      let arrayOrderSensitive = config.arrayOrderSensitive ?? false;
+      if (cmdOpts.arrayOrderSensitive === true) {
+        arrayOrderSensitive = true;
+      }
+      if (cmdOpts.arrayOrderSensitive === false) {
+        arrayOrderSensitive = false;
+      }
+      
       const environmentReports: EnvironmentReport[] = [];
+      
+      console.log(chalk.gray(`比较模式: ${arrayOrderSensitive ? '数组顺序敏感' : '数组顺序不敏感 (归一化比较) + key 排序'}`));
       
       for (const environment of environments) {
         console.log(chalk.cyan(`\n正在扫描环境 [${environment}]...`));
@@ -245,7 +257,8 @@ program
           environment,
           baseline,
           snapshots,
-          config.sources
+          config.sources,
+          arrayOrderSensitive
         );
         
         environmentReports.push(report);

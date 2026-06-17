@@ -6,6 +6,8 @@
 
 - **多源配置抓取**: 支持本地文件(JSON/YAML/ENV)、HTTP 接口、系统环境变量、命令执行结果
 - **基线版本管理**: 创建、查看、列出、删除配置基线
+- **规范化抽象树比对**: 对象 key 自动排序、数组内容签名归一化，消除格式/顺序误报
+- **数组顺序敏感开关**: 全局/源级/路径级三级配置，灵活控制数组顺序是否视为语义差异
 - **深度差异比对**: 智能识别新增、删除、修改、数组变更等配置变化
 - **风险等级评估**: 基于路径模式匹配规则，自动评估漂移风险等级(严重/高/中/低/信息)
 - **多格式报告输出**: 控制台彩色表格、JSON、Markdown 格式报告
@@ -186,6 +188,50 @@ cdrift baseline delete -i <baseline-id>
 | `medium` | 中风险 | 排期处理 |
 | `low` | 低风险 | 按需处理 |
 | `info` | 信息 | 关注即可 |
+
+### 规范化比对模式
+
+为了消除 YAML/JSON 的 key 顺序、缩进风格、数组元素顺序等非语义差异导致的误报，工具采用**规范化抽象树**比对方式：
+
+#### 对象 Key 排序
+
+所有对象在比较前会递归地按 key 字母顺序排序，确保仅因 key 书写顺序不同不会被判定为漂移。
+
+#### 数组顺序敏感配置
+
+支持**三级配置**，优先级从高到低：
+
+1. **路径级** (`arrayOrderSensitivePaths`): 针对特定路径的数组单独设置是否敏感
+2. **源级** (`arrayOrderSensitive`): 针对单个配置源设置
+3. **全局级** (`arrayOrderSensitive`): 全局默认设置
+
+```json
+{
+  "arrayOrderSensitive": false,
+  "sources": [
+    {
+      "id": "feature-flags-prod",
+      "name": "功能开关",
+      "type": "file",
+      "format": "yaml",
+      "path": "config/features.yaml",
+      "environment": "production",
+      "arrayOrderSensitive": false,
+      "arrayOrderSensitivePaths": [
+        "featureFlags.priorityList",
+        "featureFlags.orderedItems"
+      ]
+    }
+  ]
+}
+```
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `arrayOrderSensitive` | boolean | `false` | 全局/源级数组顺序是否敏感 |
+| `arrayOrderSensitivePaths` | string[] | `[]` | 路径级敏感列表，匹配 glob 模式 |
+
+> **💡 最佳实践**: 大部分配置场景下数组顺序不具有语义意义（如功能开关列表、标签列表等），建议保持默认 `false` 以减少误报。仅当数组顺序确实代表业务语义（如优先级列表、有序步骤）时，通过 `arrayOrderSensitivePaths` 单独指定。
 
 ## 🔧 命令行参数
 

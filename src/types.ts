@@ -14,6 +14,8 @@ export interface ConfigSource {
   description?: string;
   riskRules?: RiskRule[];
   ignorePaths?: string[];
+  arrayOrderSensitive?: boolean;
+  arrayOrderSensitivePaths?: string[];
 }
 
 export interface RiskRule {
@@ -93,4 +95,5 @@ export interface AppConfig {
   sources: ConfigSource[];
   defaultRiskRules: RiskRule[];
   environments: string[];
+  arrayOrderSensitive?: boolean;
 }

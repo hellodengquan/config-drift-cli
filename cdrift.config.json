@@ -91,7 +91,12 @@
       "format": "yaml",
       "path": "examples/configs/production/features.yaml",
       "environment": "production",
-      "description": "生产环境功能开关配置"
+      "description": "生产环境功能开关配置",
+      "arrayOrderSensitive": false,
+      "arrayOrderSensitivePaths": [
+        "featureFlags.priorityList",
+        "featureFlags.orderedItems"
+      ]
     },
     {
       "id": "feature-flags-staging",

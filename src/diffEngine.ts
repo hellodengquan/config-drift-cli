@@ -8,13 +8,16 @@ import {
   DiffItem,
   EnvironmentReport,
   SummaryReport,
-  ConfigSource
+  ConfigSource,
+  AppConfig
 } from './types';
 import {
   getCurrentTimestamp,
   pathMatchesPattern,
   sortByRiskLevel,
-  formatValue
+  formatValue,
+  normalizeData,
+  getContentSignature
 } from './utils';
 
 function getPathString(path: string[]): string {
@@ -78,22 +81,38 @@ function filterIgnoredPaths(
   return result;
 }
 
+interface CompareOptions {
+  riskRules: RiskRule[];
+  ignorePaths?: string[];
+  arrayOrderSensitive?: boolean;
+  arrayOrderSensitivePaths?: string[];
+}
+
 export function compareSnapshots(
   baselineSnapshot: ConfigSnapshot,
   currentSnapshot: ConfigSnapshot,
-  riskRules: RiskRule[],
-  ignorePaths?: string[]
+  options: CompareOptions
 ): DriftItem[] {
+  const { riskRules, ignorePaths, arrayOrderSensitive = false, arrayOrderSensitivePaths = [] } = options;
   const drifts: DriftItem[] = [];
   
   if (baselineSnapshot.sourceId !== currentSnapshot.sourceId) {
     throw new Error('快照源 ID 不匹配，无法比较');
   }
 
-  const baselineData = filterIgnoredPaths(baselineSnapshot.data, ignorePaths);
-  const currentData = filterIgnoredPaths(currentSnapshot.data, ignorePaths);
+  const baselineFiltered = filterIgnoredPaths(baselineSnapshot.data, ignorePaths);
+  const currentFiltered = filterIgnoredPaths(currentSnapshot.data, ignorePaths);
 
-  const differences = deepDiff.diff(baselineData, currentData) as DiffItem[] | undefined;
+  const normalizeOptions = {
+    sortKeys: true,
+    arrayOrderSensitive,
+    arrayOrderSensitivePaths
+  };
+
+  const baselineNormalized = normalizeData(baselineFiltered, normalizeOptions);
+  const currentNormalized = normalizeData(currentFiltered, normalizeOptions);
+
+  const differences = deepDiff.diff(baselineNormalized, currentNormalized) as DiffItem[] | undefined;
   
   if (!differences || differences.length === 0) {
     return drifts;
@@ -105,6 +124,16 @@ export function compareSnapshots(
     
     if (shouldIgnorePath(pathStr, ignorePaths)) {
       continue;
+    }
+
+    if (diff.kind === 'A' && !arrayOrderSensitive) {
+      const parentPath = pathStr;
+      const isPathSensitive = arrayOrderSensitivePaths.some(pattern =>
+        pathMatchesPattern(parentPath, pattern)
+      );
+      if (!isPathSensitive) {
+        continue;
+      }
     }
 
     const { level, description } = evaluateRisk(pathStr, riskRules);
@@ -140,7 +169,8 @@ export function compareSnapshots(
 export function compareSnapshotsById(
   baseline: Baseline,
   currentSnapshots: ConfigSnapshot[],
-  sources: ConfigSource[]
+  sources: ConfigSource[],
+  globalArrayOrderSensitive: boolean = false
 ): DriftItem[] {
   const allDrifts: DriftItem[] = [];
 
@@ -160,11 +190,18 @@ export function compareSnapshotsById(
       ...baseline.riskRules
     ];
 
+    const arrayOrderSensitive = source?.arrayOrderSensitive ?? globalArrayOrderSensitive;
+    const arrayOrderSensitivePaths = source?.arrayOrderSensitivePaths || [];
+
     const drifts = compareSnapshots(
       baselineSnapshot,
       currentSnapshot,
-      riskRules,
-      ignorePaths
+      {
+        riskRules,
+        ignorePaths,
+        arrayOrderSensitive,
+        arrayOrderSensitivePaths
+      }
     );
 
     allDrifts.push(...drifts);
@@ -186,9 +223,10 @@ export function generateEnvironmentReport(
   environment: string,
   baseline: Baseline,
   currentSnapshots: ConfigSnapshot[],
-  sources: ConfigSource[]
+  sources: ConfigSource[],
+  globalArrayOrderSensitive: boolean = false
 ): EnvironmentReport {
-  const drifts = compareSnapshotsById(baseline, currentSnapshots, sources);
+  const drifts = compareSnapshotsById(baseline, currentSnapshots, sources, globalArrayOrderSensitive);
   
   const driftCountByLevel: Record<RiskLevel, number> = {
     critical: 0,
@@ -269,4 +307,17 @@ export function formatDriftValue(drift: DriftItem): string {
     return `删除: ${formatValue(drift.baselineValue)}`;
   }
   return `${formatValue(drift.baselineValue)} → ${formatValue(drift.currentValue)}`;
+}
+
+export function getArrayOrderInfo(
+  source: ConfigSource | undefined,
+  globalSensitive: boolean
+): { sensitive: boolean; sourceLevel: boolean; globalLevel: boolean } {
+  const sourceLevel = source?.arrayOrderSensitive;
+  const sensitive = sourceLevel ?? globalSensitive;
+  return {
+    sensitive,
+    sourceLevel: sourceLevel === true,
+    globalLevel: globalSensitive && sourceLevel === undefined
+  };
 }

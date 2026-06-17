@@ -1,6 +1,7 @@
 {
   "storagePath": ".cdrift",
   "environments": ["production", "staging", "development"],
+  "arrayOrderSensitive": false,
   "defaultRiskRules": [
     {
       "pathPattern": "database.**",

@@ -111,3 +111,99 @@ export function getEnvVars(prefix?: string): Record<string, string> {
   }
   return result;
 }
+
+export function deepSortObjectKeys(obj: any): any {
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(item => deepSortObjectKeys(item));
+  }
+
+  const sortedKeys = Object.keys(obj).sort();
+  const sortedObj: Record<string, any> = {};
+
+  for (const key of sortedKeys) {
+    sortedObj[key] = deepSortObjectKeys(obj[key]);
+  }
+
+  return sortedObj;
+}
+
+export function getContentSignature(value: any): string {
+  const sorted = deepSortObjectKeys(value);
+  const jsonStr = JSON.stringify(sorted);
+  return generateChecksum(jsonStr);
+}
+
+export function normalizeArray(arr: any[]): any[] {
+  return [...arr].sort((a, b) => {
+    const sigA = getContentSignature(a);
+    const sigB = getContentSignature(b);
+    return sigA.localeCompare(sigB);
+  });
+}
+
+export interface NormalizeOptions {
+  sortKeys?: boolean;
+  arrayOrderSensitive?: boolean;
+  arrayOrderSensitivePaths?: string[];
+  currentPath?: string;
+}
+
+export function normalizeData(data: any, options: NormalizeOptions = {}): any {
+  const {
+    sortKeys = true,
+    arrayOrderSensitive = false,
+    arrayOrderSensitivePaths = [],
+    currentPath = ''
+  } = options;
+
+  if (data === null || typeof data !== 'object') {
+    return data;
+  }
+
+  if (Array.isArray(data)) {
+    const isPathSensitive = arrayOrderSensitivePaths.some(pattern =>
+      pathMatchesPattern(currentPath, pattern)
+    );
+
+    const shouldNormalizeArray = !arrayOrderSensitive && !isPathSensitive;
+
+    const normalizedItems = data.map((item, index) =>
+      normalizeData(item, {
+        sortKeys,
+        arrayOrderSensitive,
+        arrayOrderSensitivePaths,
+        currentPath: `${currentPath}.${index}`
+      })
+    );
+
+    if (shouldNormalizeArray) {
+      return normalizeArray(normalizedItems);
+    }
+
+    return normalizedItems;
+  }
+
+  const result: Record<string, any> = {};
+  const keys = sortKeys ? Object.keys(data).sort() : Object.keys(data);
+
+  for (const key of keys) {
+    const newPath = currentPath ? `${currentPath}.${key}` : key;
+    result[key] = normalizeData(data[key], {
+      sortKeys,
+      arrayOrderSensitive,
+      arrayOrderSensitivePaths,
+      currentPath: newPath
+    });
+  }
+
+  return result;
+}
+
+export function canonicalJson(obj: any): string {
+  const normalized = deepSortObjectKeys(obj);
+  return JSON.stringify(normalized);
+}
