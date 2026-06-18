@@ -46,7 +46,26 @@
       "format": "json",
       "path": "examples/configs/production/app-config.json",
       "environment": "production",
-      "description": "生产环境应用主配置"
+      "description": "生产环境应用主配置",
+      "matrixGroup": "app-config",
+      "plane": "control-plane",
+      "stripComments": true,
+      "vaultRefPatterns": [
+        "{{vault:*}}",
+        "{{secret:*}}",
+        "/^\\{\\{[a-z]+:prod/.+\\}\\}$/",
+        "vault:prod/"
+      ],
+      "expectedPerEnvPaths": [
+        {
+          "pathPattern": "database.host",
+          "description": "数据库主机名各环境不同"
+        },
+        {
+          "pathPattern": "redis.*",
+          "description": "Redis连接各环境不同"
+        }
+      ]
     },
     {
       "id": "app-config-staging",
@@ -55,7 +74,25 @@
       "format": "json",
       "path": "examples/configs/staging/app-config.json",
       "environment": "staging",
-      "description": "预发布环境应用主配置"
+      "description": "预发布环境应用主配置",
+      "matrixGroup": "app-config",
+      "plane": "control-plane",
+      "stripComments": true,
+      "vaultRefPatterns": [
+        "{{vault:*}}",
+        "{{secret:*}}",
+        "/^\\{\\{[a-z]+:staging/.+\\}\\}$/"
+      ],
+      "expectedPerEnvPaths": [
+        {
+          "pathPattern": "database.host",
+          "description": "数据库主机名各环境不同"
+        },
+        {
+          "pathPattern": "redis.*",
+          "description": "Redis连接各环境不同"
+        }
+      ]
     },
     {
       "id": "app-config-dev",
@@ -64,7 +101,25 @@
       "format": "json",
       "path": "examples/configs/development/app-config.json",
       "environment": "development",
-      "description": "开发环境应用主配置"
+      "description": "开发环境应用主配置",
+      "matrixGroup": "app-config",
+      "plane": "control-plane",
+      "stripComments": true,
+      "vaultRefPatterns": [
+        "{{vault:*}}",
+        "{{secret:*}}",
+        "/^\\{\\{[a-z]+:dev/.+\\}\\}$/"
+      ],
+      "expectedPerEnvPaths": [
+        {
+          "pathPattern": "database.host",
+          "description": "数据库主机名各环境不同"
+        },
+        {
+          "pathPattern": "redis.*",
+          "description": "Redis连接各环境不同"
+        }
+      ]
     },
     {
       "id": "env-prod",
@@ -73,7 +128,14 @@
       "format": "env",
       "path": "examples/configs/production/.env",
       "environment": "production",
-      "description": "生产环境环境变量"
+      "description": "生产环境环境变量",
+      "matrixGroup": "env",
+      "plane": "data-plane",
+      "stripComments": true,
+      "vaultRefPatterns": [
+        "/^\\{\\{vault:prod/.+\\}\\}$/",
+        "vault:prod/"
+      ]
     },
     {
       "id": "env-staging",
@@ -82,7 +144,10 @@
       "format": "env",
       "path": "examples/configs/staging/.env",
       "environment": "staging",
-      "description": "预发布环境环境变量"
+      "description": "预发布环境环境变量",
+      "matrixGroup": "env",
+      "plane": "data-plane",
+      "stripComments": true
     },
     {
       "id": "feature-flags-prod",
@@ -92,6 +157,9 @@
       "path": "examples/configs/production/features.yaml",
       "environment": "production",
       "description": "生产环境功能开关配置",
+      "matrixGroup": "feature-flags",
+      "plane": "data-plane",
+      "stripComments": true,
       "arrayOrderSensitive": false,
       "arrayOrderSensitivePaths": [
         "featureFlags.priorityList",
@@ -105,7 +173,10 @@
       "format": "yaml",
       "path": "examples/configs/staging/features.yaml",
       "environment": "staging",
-      "description": "预发布环境功能开关配置"
+      "description": "预发布环境功能开关配置",
+      "matrixGroup": "feature-flags",
+      "plane": "data-plane",
+      "stripComments": true
     },
     {
       "id": "system-env",

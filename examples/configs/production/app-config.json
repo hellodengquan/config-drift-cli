@@ -28,7 +28,9 @@
     "enable2FA": true
   },
   "auth": {
-    "jwtSecret": "prod-jwt-secret-2024",
+    "jwtSecret": "{{vault:prod/jwt/secret}}",
+    "dbPassword": "{{ vault : prod/db/password }}",
+    "apiKey": "{{secret:prod/api/main-key}}",
     "tokenExpiry": 3600,
     "refreshTokenExpiry": 86400
   },

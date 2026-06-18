@@ -284,6 +284,49 @@ cdrift baseline delete -i <baseline-id>
 
 配置后，不同写法的同一引用（如 `{{ vault : prod/db/password }}` 和 `{{vault:prod/db/password}}`）会被归一化为相同格式，不视为漂移。
 
+#### 模式匹配格式（3种）
+
+`vaultRefPatterns` 支持三种匹配方式：
+
+| 格式 | 示例 | 匹配范围 |
+|------|------|----------|
+| **Glob 通配符** | `{{vault:*}}`, `{{secret:prod/*}}` | 标准 glob 模式，`*` 匹配任意字符 |
+| **Regex 正则** | `/^\{\{[a-z]+:prod/.+\}\}$/` | 用 `/.../` 包裹的正则表达式 |
+| **前缀通配** | `vault:prod/`, `secret:staging/` | 作为子字符串匹配，只要包含该前缀 |
+
+> **💡 灵活适配**: 当 Vault 命名规范变化时（如从 `vault:` 改为 `secret:`），只需更新 pattern 表达式，无需改动 cdrift.config.json。
+
+### 字段优先级标签 (Control Plane / Data Plane)
+
+通过 `plane` 字段标记配置来源的优先级，帮助运维快速区分关键程度：
+
+| Plane | 含义 | 优先级 | 典型配置 |
+|-------|------|--------|----------|
+| `control-plane` | 管控面配置 | 🔴 高 | API 网关、认证、数据库连接、核心业务开关 |
+| `data-plane` | 数据面配置 | 🟡 中 | 功能开关、UI 配置、日志级别 |
+| `default` | 默认 | ⚪ 一般 | 其他未标记配置 |
+
+```json
+{
+  "sources": [
+    {
+      "id": "api-gateway-prod",
+      "name": "API网关配置",
+      "matrixGroup": "api-gateway",
+      "plane": "control-plane"
+    },
+    {
+      "id": "feature-flags-prod",
+      "name": "功能开关",
+      "matrixGroup": "feature-flags",
+      "plane": "data-plane"
+    }
+  ]
+}
+```
+
+矩阵报告会按 plane 统计漂移数，并在优先级排序中给 control-plane 更高权重。
+
 ### 预期环境差异 (expected-per-env)
 
 对于 hostname、endpoint 等**有意在各环境不同**的字段，可以标记为预期差异，不视为漂移（或降级为 info 级）：
@@ -328,11 +371,33 @@ cdrift matrix -e production,staging,development --show-expected
 ```
 
 矩阵报告包含：
+- 环境优先级总览（**5秒速览**，按严重程度排序，区分管控面/数据面）
 - 风险等级统计汇总
 - 配置源漂移概览（哪些源在各环境间有差异）
 - 每对环境的漂移详情
 
-**分组配置**: 使用 `matrixGroup` 字段将不同环境的同源配置分到一组进行比较：
+**控制台输出的环境优先级总览示例**：
+
+```
+🚨 环境优先级总览 (5秒速览)
+按严重程度排序，先盯最严重的环境
+
+  staging
+    漂移占比: █████████████████░░░ 85% (17项)
+    风险分布: 严重:2  高:3  中:5  低:4  信息:3
+    分类统计: 🔴 管控面: 5  🟡 数据面: 12
+    🔥 TOP严重: database.host — "staging-db.internal" → "staging-db.new.internal"
+
+  development
+    漂移占比: ████████████░░░░░░░░ 60% (12项)
+    风险分布: 严重:1  高:2  中:4  低:3  信息:2
+    分类统计: 🔴 管控面: 2  🟡 数据面: 10
+
+  [基准] production
+    漂移占比: ░░░░░░░░░░░░░░░░░░░░ 0% (0项)
+```
+
+**分组配置**: 使用 `matrixGroup` 字段将不同环境的同源配置分到一组进行比较，配合 `plane` 区分优先级：
 
 ```json
 {

@@ -13,7 +13,9 @@ import {
   MatrixReport,
   MatrixDriftCell,
   MatrixSourceSummary,
-  ExpectedPerEnvPath
+  ExpectedPerEnvPath,
+  EnvironmentPlaneSummary,
+  ConfigPlane
 } from './types';
 import {
   getCurrentTimestamp,
@@ -520,6 +522,112 @@ function generateSourceSummaries(
   return summaries;
 }
 
+function generateEnvironmentSummaries(
+  cells: MatrixDriftCell[],
+  environments: string[],
+  sources: ConfigSource[],
+  compareMode: 'all' | 'baseline',
+  baselineEnvironment?: string
+): EnvironmentPlaneSummary[] {
+  const summaries: EnvironmentPlaneSummary[] = [];
+  const groupToPlane: Record<string, ConfigPlane> = {};
+  const groupToSource: Record<string, ConfigSource> = {};
+  
+  for (const source of sources) {
+    const key = source.matrixGroup || source.id;
+    if (!groupToPlane[key]) {
+      groupToPlane[key] = source.plane || 'default';
+      groupToSource[key] = source;
+    }
+  }
+
+  const envDriftMap: Record<string, {
+    total: number;
+    byLevel: Record<RiskLevel, number>;
+    byPlane: Record<ConfigPlane, number>;
+    allDrifts: DriftItem[];
+  }> = {};
+
+  for (const env of environments) {
+    envDriftMap[env] = {
+      total: 0,
+      byLevel: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
+      byPlane: { 'control-plane': 0, 'data-plane': 0, 'default': 0 },
+      allDrifts: []
+    };
+  }
+
+  for (const cell of cells) {
+    const processDrifts = (targetEnv: string) => {
+      for (const drift of cell.drifts) {
+        envDriftMap[targetEnv].total++;
+        envDriftMap[targetEnv].byLevel[drift.riskLevel]++;
+        envDriftMap[targetEnv].allDrifts.push(drift);
+        
+        const plane = groupToPlane[drift.sourceId] || 'default';
+        envDriftMap[targetEnv].byPlane[plane]++;
+      }
+    };
+
+    if (compareMode === 'baseline') {
+      processDrifts(cell.environmentB);
+    } else {
+      processDrifts(cell.environmentA);
+      processDrifts(cell.environmentB);
+    }
+  }
+
+  const levelOrder: RiskLevel[] = ['critical', 'high', 'medium', 'low', 'info'];
+  const maxDrifts = Math.max(...Object.values(envDriftMap).map(e => e.total), 1);
+
+  for (const env of environments) {
+    const data = envDriftMap[env];
+    
+    const sortedDrifts = sortByRiskLevel(data.allDrifts);
+    const uniqueDrifts: DriftItem[] = [];
+    const seen = new Set<string>();
+    for (const drift of sortedDrifts) {
+      const key = `${drift.path}:${drift.sourceId}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueDrifts.push(drift);
+        if (uniqueDrifts.length >= 5) break;
+      }
+    }
+
+    let driftPercentage = 0;
+    if (compareMode === 'baseline' && baselineEnvironment) {
+      if (env === baselineEnvironment) {
+        driftPercentage = 0;
+      } else {
+        driftPercentage = data.total > 0 ? Math.round((data.total / maxDrifts) * 100) : 0;
+      }
+    } else {
+      driftPercentage = data.total > 0 ? Math.round((data.total / maxDrifts) * 100) : 0;
+    }
+
+    summaries.push({
+      environment: env,
+      totalDrifts: data.total,
+      driftPercentage,
+      driftCountByLevel: { ...data.byLevel },
+      controlPlaneDrifts: data.byPlane['control-plane'],
+      dataPlaneDrifts: data.byPlane['data-plane'],
+      defaultPlaneDrifts: data.byPlane['default'],
+      topDrifts: uniqueDrifts
+    });
+  }
+
+  const priorityScore = (s: EnvironmentPlaneSummary) => {
+    return s.driftCountByLevel.critical * 1000 +
+           s.driftCountByLevel.high * 100 +
+           s.controlPlaneDrifts * 10 +
+           s.driftCountByLevel.medium;
+  };
+
+  return summaries.sort((a, b) => priorityScore(b) - priorityScore(a));
+}
+
 export function generateMatrixReport(
   allSnapshots: ConfigSnapshot[],
   options: MatrixCompareOptions
@@ -635,6 +743,14 @@ export function generateMatrixReport(
 
   const sourcesWithDrift = sourceSummaries.filter(s => s.hasDrift).length;
 
+  const environmentSummaries = generateEnvironmentSummaries(
+    cells,
+    environments,
+    sources,
+    compareMode,
+    baselineEnvironment
+  );
+
   return {
     generatedAt: getCurrentTimestamp(),
     environments,
@@ -645,7 +761,8 @@ export function generateMatrixReport(
     cells,
     sourceSummaries,
     compareMode,
-    baselineEnvironment: compareMode === 'baseline' ? baselineEnvironment : undefined
+    baselineEnvironment: compareMode === 'baseline' ? baselineEnvironment : undefined,
+    environmentSummaries
   };
 }
 
@@ -674,10 +791,75 @@ export function printMatrixConsoleReport(report: MatrixReport, minLevel: RiskLev
     }
   }
 
+  console.log(chalk.red('\n🚨 环境优先级总览 (5秒速览)'));
+  console.log(chalk.gray('按严重程度排序，先盯最严重的环境'));
+  console.log('');
+  
+  for (const envSummary of report.environmentSummaries) {
+    const isBaseline = report.baselineEnvironment === envSummary.environment;
+    const envLabel = isBaseline ? `[基准] ${envSummary.environment}` : envSummary.environment;
+    
+    let priorityColor: (str: string) => string = chalk.green;
+    if (envSummary.driftCountByLevel.critical > 0) {
+      priorityColor = chalk.red;
+    } else if (envSummary.driftCountByLevel.high > 0) {
+      priorityColor = chalk.redBright;
+    } else if (envSummary.controlPlaneDrifts > 0 || envSummary.driftCountByLevel.medium > 0) {
+      priorityColor = chalk.yellow;
+    }
+    
+    const barLength = Math.round(envSummary.driftPercentage / 5);
+    const bar = '█'.repeat(barLength) + '░'.repeat(20 - barLength);
+    
+    const planeParts: string[] = [];
+    if (envSummary.controlPlaneDrifts > 0) {
+      planeParts.push(chalk.red(`🔴 管控面: ${envSummary.controlPlaneDrifts}`));
+    }
+    if (envSummary.dataPlaneDrifts > 0) {
+      planeParts.push(chalk.yellow(`🟡 数据面: ${envSummary.dataPlaneDrifts}`));
+    }
+    if (envSummary.defaultPlaneDrifts > 0 && planeParts.length === 0) {
+      planeParts.push(chalk.gray(`⚪ 其他: ${envSummary.defaultPlaneDrifts}`));
+    }
+    
+    const levelParts: string[] = [];
+    if (envSummary.driftCountByLevel.critical > 0) {
+      levelParts.push(chalk.red(`严重:${envSummary.driftCountByLevel.critical}`));
+    }
+    if (envSummary.driftCountByLevel.high > 0) {
+      levelParts.push(chalk.redBright(`高:${envSummary.driftCountByLevel.high}`));
+    }
+    if (envSummary.driftCountByLevel.medium > 0) {
+      levelParts.push(chalk.yellow(`中:${envSummary.driftCountByLevel.medium}`));
+    }
+    if (envSummary.driftCountByLevel.low > 0) {
+      levelParts.push(chalk.blue(`低:${envSummary.driftCountByLevel.low}`));
+    }
+    if (envSummary.driftCountByLevel.info > 0) {
+      levelParts.push(chalk.gray(`信息:${envSummary.driftCountByLevel.info}`));
+    }
+
+    console.log(priorityColor(`  ${envLabel}`));
+    console.log(`    漂移占比: ${chalk.cyan(bar)} ${envSummary.driftPercentage}% (${envSummary.totalDrifts}项)`);
+    if (levelParts.length > 0) {
+      console.log(`    风险分布: ${levelParts.join('  ')}`);
+    }
+    if (planeParts.length > 0) {
+      console.log(`    分类统计: ${planeParts.join('  ')}`);
+    }
+    if (envSummary.topDrifts.length > 0) {
+      const criticalDrift = envSummary.topDrifts.find(d => d.riskLevel === 'critical');
+      if (criticalDrift) {
+        console.log(`    🔥 TOP严重: ${criticalDrift.path} — ${formatDriftValue(criticalDrift)}`);
+      }
+    }
+    console.log('');
+  }
+
   console.log(chalk.yellow('\n── 配置源漂移概览 ──'));
   for (const summary of report.sourceSummaries) {
     const status = summary.hasDrift ? chalk.red('✗ 有漂移') : chalk.green('✓ 一致');
-    console.log(`  ${status} ${summary.sourceName} (${summary.sourceId})`);
+    console.log(`  ${status} ${summary.sourceName}`);
   }
 
   console.log(chalk.yellow('\n── 环境对漂移详情 ──'));
@@ -730,6 +912,24 @@ export function exportMatrixMarkdownReport(report: MatrixReport, outputPath: str
   md += '|---------|------|\n';
   for (const level of ['critical', 'high', 'medium', 'low', 'info'] as RiskLevel[]) {
     md += `| ${level} | ${report.driftCountByLevel[level]} |\n`;
+  }
+  md += '\n';
+
+  md += '## 🚨 环境优先级总览\n\n';
+  md += '> 按严重程度排序，先盯最严重的环境\n\n';
+  md += '| 环境 | 漂移数 | 占比 | 严重 | 高 | 中 | 低 | 信息 | 管控面 | 数据面 | 其他 |\n';
+  md += '|------|--------|------|------|----|----|----|------|--------|--------|------|\n';
+  for (const env of report.environmentSummaries) {
+    md += `| ${env.environment} | ${env.totalDrifts} | ${env.driftPercentage}% | ${env.driftCountByLevel.critical} | ${env.driftCountByLevel.high} | ${env.driftCountByLevel.medium} | ${env.driftCountByLevel.low} | ${env.driftCountByLevel.info} | ${env.controlPlaneDrifts} | ${env.dataPlaneDrifts} | ${env.defaultPlaneDrifts} |\n`;
+  }
+  md += '\n';
+
+  md += '### TOP 严重漂移\n\n';
+  for (const env of report.environmentSummaries) {
+    const criticalDrift = env.topDrifts.find(d => d.riskLevel === 'critical');
+    if (criticalDrift) {
+      md += `- **${env.environment}**: \`${criticalDrift.path}\` — ${formatDriftValue(criticalDrift)}\n`;
+    }
   }
   md += '\n';
 

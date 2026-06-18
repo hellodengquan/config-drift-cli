@@ -4,6 +4,8 @@ export type ConfigSourceType = 'file' | 'http' | 'env' | 'command';
 
 export type ConfigFormat = 'json' | 'yaml' | 'env' | 'text';
 
+export type ConfigPlane = 'control-plane' | 'data-plane' | 'default';
+
 export interface ConfigSource {
   id: string;
   name: string;
@@ -20,6 +22,8 @@ export interface ConfigSource {
   vaultRefPatterns?: string[];
   expectedPerEnvPaths?: ExpectedPerEnvPath[];
   matrixGroup?: string;
+  plane?: ConfigPlane;
+  tags?: string[];
 }
 
 export interface ExpectedPerEnvPath {
@@ -115,6 +119,17 @@ export interface MatrixSourceSummary {
   hasDrift: boolean;
 }
 
+export interface EnvironmentPlaneSummary {
+  environment: string;
+  totalDrifts: number;
+  driftPercentage: number;
+  driftCountByLevel: Record<RiskLevel, number>;
+  controlPlaneDrifts: number;
+  dataPlaneDrifts: number;
+  defaultPlaneDrifts: number;
+  topDrifts: DriftItem[];
+}
+
 export interface MatrixReport {
   generatedAt: string;
   environments: string[];
@@ -126,6 +141,7 @@ export interface MatrixReport {
   sourceSummaries: MatrixSourceSummary[];
   compareMode: 'all' | 'baseline';
   baselineEnvironment?: string;
+  environmentSummaries: EnvironmentPlaneSummary[];
 }
 
 export interface AppConfig {

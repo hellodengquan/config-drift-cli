@@ -8,7 +8,7 @@
   "database": {
     "host": "db-staging.example.com",
     "port": 5432,
-    "name": "ecommerce_staging",
+    "name": "ecommerce_prod",
     "pool": {
       "min": 2,
       "max": 10,

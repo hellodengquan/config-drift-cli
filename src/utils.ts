@@ -380,24 +380,74 @@ export function isVaultReference(value: any, patterns?: string[]): boolean {
   if (typeof value !== 'string') return false;
   if (patterns && patterns.length > 0) {
     return patterns.some(pattern => {
-      const regex = new RegExp(
+      if (pattern.startsWith('/') && pattern.endsWith('/') && pattern.length >= 2) {
+        const regexPattern = pattern.slice(1, -1);
+        try {
+          const regex = new RegExp(regexPattern);
+          return regex.test(value);
+        } catch {
+          return false;
+        }
+      }
+      
+      if (pattern.includes('*') || pattern.includes('{{') || pattern.includes('}}')) {
+        const regex = new RegExp(
+          pattern
+            .replace(/\./g, '\\.')
+            .replace(/\*/g, '.*')
+            .replace(/\{\{/g, '\\{\\{')
+            .replace(/\}\}/g, '\\}\\}')
+        );
+        return regex.test(value);
+      }
+      
+      if (value.includes(pattern)) {
+        return true;
+      }
+      
+      const globRegex = new RegExp(
         pattern
           .replace(/\./g, '\\.')
           .replace(/\*/g, '.*')
-          .replace(/\{\{/g, '\\{\\{')
-          .replace(/\}\}/g, '\\}\\}')
       );
-      return regex.test(value);
+      return globRegex.test(value);
     });
   }
   return /^\s*\{\{[\s\S]*\}\}\s*$/.test(value);
 }
 
-export function getVaultReferencePath(value: string): string | null {
-  const match = value.match(/\{\{\s*(?:vault\s*:)?\s*([^}\s]+)\s*\}\}/i);
-  if (match) {
-    return match[1];
+export function getVaultReferencePath(value: string, patterns?: string[]): string | null {
+  const trimmed = value.trim();
+  
+  const vaultMatch = trimmed.match(/^\s*\{\{\s*(?:vault\s*:\s*)?([^}\s]+)\s*\}\}\s*$/i);
+  if (vaultMatch) {
+    return vaultMatch[1];
   }
+  
+  if (patterns && patterns.length > 0) {
+    for (const pattern of patterns) {
+      if (pattern.startsWith('/') && pattern.endsWith('/') && pattern.length >= 2) {
+        const regexPattern = pattern.slice(1, -1);
+        try {
+          const regex = new RegExp(regexPattern);
+          const match = trimmed.match(regex);
+          if (match) {
+            return match[1] || match[0];
+          }
+        } catch {
+          continue;
+        }
+      }
+    }
+  }
+  
+  const genericMatch = trimmed.match(/^\s*\{\{\s*([^}]+?)\s*\}\}\s*$/);
+  if (genericMatch) {
+    const content = genericMatch[1].trim();
+    const colonIndex = content.indexOf(':');
+    return colonIndex > 0 ? content.slice(colonIndex + 1).trim() : content;
+  }
+  
   return null;
 }
 
@@ -408,7 +458,7 @@ export function normalizeVaultReferences(obj: any, patterns?: string[]): any {
 
   if (typeof obj === 'string') {
     if (isVaultReference(obj, patterns)) {
-      const refPath = getVaultReferencePath(obj);
+      const refPath = getVaultReferencePath(obj, patterns);
       if (refPath) {
         return `{{vault:${refPath}}}`;
       }
