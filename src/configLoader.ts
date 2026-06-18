@@ -13,7 +13,9 @@ import {
   writeJsonFile,
   fileExists,
   parseEnvContent,
-  getEnvVars
+  getEnvVars,
+  stripComments,
+  normalizeVaultReferences
 } from './utils';
 
 const DEFAULT_CONFIG_PATH = path.join(process.cwd(), 'cdrift.config.json');
@@ -144,8 +146,18 @@ export async function fetchSource(source: ConfigSource): Promise<string> {
 }
 
 export async function captureSnapshot(source: ConfigSource): Promise<ConfigSnapshot> {
-  const rawContent = await fetchSource(source);
+  let rawContent = await fetchSource(source);
+  
+  const stripCommentsEnabled = source.stripComments !== false;
+  if (stripCommentsEnabled) {
+    rawContent = stripComments(rawContent, source.format);
+  }
+  
   const data = parseConfigContent(rawContent, source.format);
+  
+  const normalizedData = source.vaultRefPatterns && source.vaultRefPatterns.length > 0
+    ? normalizeVaultReferences(data, source.vaultRefPatterns)
+    : data;
   
   const snapshot: ConfigSnapshot = {
     id: generateId(),
@@ -154,7 +166,7 @@ export async function captureSnapshot(source: ConfigSource): Promise<ConfigSnaps
     environment: source.environment,
     timestamp: getCurrentTimestamp(),
     format: source.format,
-    data,
+    data: normalizedData,
     rawContent,
     metadata: {
       path: source.path,

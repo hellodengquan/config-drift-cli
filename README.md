@@ -8,6 +8,11 @@
 - **基线版本管理**: 创建、查看、列出、删除配置基线
 - **规范化抽象树比对**: 对象 key 自动排序、数组内容签名归一化，消除格式/顺序误报
 - **数组顺序敏感开关**: 全局/源级/路径级三级配置，灵活控制数组顺序是否视为语义差异
+- **跨格式类型归一化**: 布尔、数字、null 等字面量自动归一，YAML bool 与 ENV string 不误报
+- **注释自动移除**: YAML/.env 文件中的注释行自动过滤，不参与比较
+- **Vault 引用规范化**: `{{vault:xxx}}` 引用格式统一，同一路径视为一致
+- **预期环境差异注解**: hostname/endpoint 等有意差异字段可标记为 expected-per-env，不视为漂移
+- **多环境矩阵化比对**: 同时对比三个或更多环境，输出矩阵化漂移摘要
 - **深度差异比对**: 智能识别新增、删除、修改、数组变更等配置变化
 - **风险等级评估**: 基于路径模式匹配规则，自动评估漂移风险等级(严重/高/中/低/信息)
 - **多格式报告输出**: 控制台彩色表格、JSON、Markdown 格式报告
@@ -233,6 +238,112 @@ cdrift baseline delete -i <baseline-id>
 
 > **💡 最佳实践**: 大部分配置场景下数组顺序不具有语义意义（如功能开关列表、标签列表等），建议保持默认 `false` 以减少误报。仅当数组顺序确实代表业务语义（如优先级列表、有序步骤）时，通过 `arrayOrderSensitivePaths` 单独指定。
 
+### 跨格式类型归一化
+
+不同配置格式的字面量类型差异（如 YAML 中 `true` 是布尔值，.env 中 `"true"` 是字符串）会自动归一化，避免误报：
+
+| 原始值 (不同格式) | 归一化结果 |
+|---|---|
+| `true`, `"true"`, `"yes"`, `"on"` | `true` |
+| `false`, `"false"`, `"no"`, `"off"` | `false` |
+| `5432`, `"5432"` | `5432` |
+| `3.14`, `"3.14"`, `"1e3"` | `3.14`, `1000` |
+| `null`, `"null"`, `"~"`, `""` | `null` |
+
+> **💡 智能识别**: 使用整串正则匹配，含数字的字符串如 `db-host-5432` 或 `v2.1.0` 不会被误判为数字。
+
+### 注释自动移除
+
+默认启用，YAML 和 .env 文件中的注释行在比较前会被自动移除，避免注释变更导致的误报：
+
+- **YAML**: `#` 开头的注释行、行尾注释（不在引号内）都会被移除
+- **.env**: `#` 开头的注释行、行尾注释（不在引号内）都会被移除
+- **JSON**: 不移除（标准 JSON 不支持注释）
+
+配置项：`stripComments: boolean`（默认 `true`，设置为 `false` 可关闭）
+
+### Vault 引用规范化
+
+对于使用 Vault 等密钥管理系统的配置引用（如 `{{vault:path/to/secret}}`），支持按引用路径归一化：
+
+```json
+{
+  "sources": [
+    {
+      "id": "app-prod",
+      "name": "应用配置",
+      "type": "file",
+      "format": "yaml",
+      "path": "config/app.yaml",
+      "environment": "production",
+      "vaultRefPatterns": ["{{vault:*}}", "{{secret:*}}"]
+    }
+  ]
+}
+```
+
+配置后，不同写法的同一引用（如 `{{ vault : prod/db/password }}` 和 `{{vault:prod/db/password}}`）会被归一化为相同格式，不视为漂移。
+
+### 预期环境差异 (expected-per-env)
+
+对于 hostname、endpoint 等**有意在各环境不同**的字段，可以标记为预期差异，不视为漂移（或降级为 info 级）：
+
+```json
+{
+  "sources": [
+    {
+      "id": "app-prod",
+      "name": "应用配置",
+      "type": "file",
+      "format": "yaml",
+      "path": "config/app.yaml",
+      "environment": "production",
+      "expectedPerEnvPaths": [
+        { "pathPattern": "database.host", "description": "数据库主机名各环境不同" },
+        { "pathPattern": "redis.*", "description": "Redis连接各环境不同" }
+      ]
+    }
+  ]
+}
+```
+
+使用 `--show-expected` 参数可以在报告中显示这些预期差异（标记为 `[预期]`，风险等级为 `info`）。
+
+### 多环境矩阵化比对
+
+同时对比三个或更多环境的配置，生成矩阵化漂移摘要：
+
+```bash
+# 全量两两比对（3个环境生成3对比较）
+cdrift matrix -e production,staging,development -m all
+
+# 基线模式：以生产环境为基准，其他环境都跟它比
+cdrift matrix -e production,staging,development -m baseline -b production
+
+# 只显示高风险以上，导出Markdown报告
+cdrift matrix -e production,staging,development -l high -o drift-matrix.md
+
+# 显示预期环境差异
+cdrift matrix -e production,staging,development --show-expected
+```
+
+矩阵报告包含：
+- 风险等级统计汇总
+- 配置源漂移概览（哪些源在各环境间有差异）
+- 每对环境的漂移详情
+
+**分组配置**: 使用 `matrixGroup` 字段将不同环境的同源配置分到一组进行比较：
+
+```json
+{
+  "sources": [
+    { "id": "app-prod", "matrixGroup": "app-config", "environment": "production", ... },
+    { "id": "app-staging", "matrixGroup": "app-config", "environment": "staging", ... },
+    { "id": "app-dev", "matrixGroup": "app-config", "environment": "development", ... }
+  ]
+}
+```
+
 ## 🔧 命令行参数
 
 ### 全局参数
@@ -287,6 +398,25 @@ cdrift baseline delete -i <baseline-id>
 -o, --output <path>        输出报告文件
 -f, --format <format>      输出格式: json|md|console (默认: console)
 --fail-on <level>          该等级及以上漂移时退出码为 1
+--show-expected            显示预期环境差异
+--array-order-sensitive    数组顺序敏感模式
+--no-array-order-sensitive 数组顺序不敏感模式 (默认)
+```
+
+### `cdrift matrix`
+
+多环境矩阵化漂移比对
+
+```
+-e, --environments <envs>  指定环境列表，逗号分隔 (默认: 所有环境)
+-m, --mode <mode>          比对模式: all(全量两两) | baseline(基线环境) (默认: all)
+-b, --baseline-env <env>   基线环境 (mode=baseline 时使用)
+-l, --level <level>        最低显示风险等级 (默认: info)
+-o, --output <path>        输出报告文件
+-f, --format <format>      输出格式: json|md|console (默认: console)
+--show-expected            显示预期环境差异
+--array-order-sensitive    数组顺序敏感模式
+--no-array-order-sensitive 数组顺序不敏感模式 (默认)
 ```
 
 ### `cdrift sources`

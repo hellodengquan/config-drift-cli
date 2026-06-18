@@ -16,6 +16,16 @@ export interface ConfigSource {
   ignorePaths?: string[];
   arrayOrderSensitive?: boolean;
   arrayOrderSensitivePaths?: string[];
+  stripComments?: boolean;
+  vaultRefPatterns?: string[];
+  expectedPerEnvPaths?: ExpectedPerEnvPath[];
+  matrixGroup?: string;
+}
+
+export interface ExpectedPerEnvPath {
+  pathPattern: string;
+  description?: string;
+  allowedEnvironments?: string[];
 }
 
 export interface RiskRule {
@@ -88,6 +98,34 @@ export interface SummaryReport {
   totalDrifts: number;
   driftCountByLevel: Record<RiskLevel, number>;
   environmentReports: EnvironmentReport[];
+}
+
+export interface MatrixDriftCell {
+  environmentA: string;
+  environmentB: string;
+  totalDrifts: number;
+  driftCountByLevel: Record<RiskLevel, number>;
+  drifts: DriftItem[];
+}
+
+export interface MatrixSourceSummary {
+  sourceId: string;
+  sourceName: string;
+  environmentValues: Record<string, any>;
+  hasDrift: boolean;
+}
+
+export interface MatrixReport {
+  generatedAt: string;
+  environments: string[];
+  totalSources: number;
+  sourcesWithDrift: number;
+  totalDriftPairs: number;
+  driftCountByLevel: Record<RiskLevel, number>;
+  cells: MatrixDriftCell[];
+  sourceSummaries: MatrixSourceSummary[];
+  compareMode: 'all' | 'baseline';
+  baselineEnvironment?: string;
 }
 
 export interface AppConfig {

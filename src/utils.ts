@@ -291,3 +291,150 @@ export function canonicalJson(obj: any): string {
   const sorted = deepSortObjectKeys(normalized);
   return JSON.stringify(sorted);
 }
+
+export function stripEnvComments(content: string): string {
+  const lines = content.split('\n');
+  const result: string[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) {
+      continue;
+    }
+    const eqIndex = line.indexOf('=');
+    if (eqIndex > 0) {
+      const key = line.slice(0, eqIndex);
+      let value = line.slice(eqIndex + 1);
+      
+      const commentMatch = value.match(/\s+#.*$/);
+      if (commentMatch && commentMatch.index !== undefined) {
+        const inQuotes = (
+          (value.startsWith('"') && value.endsWith('"')) ||
+          (value.startsWith("'") && value.endsWith("'"))
+        );
+        if (!inQuotes) {
+          value = value.slice(0, commentMatch.index).trimEnd();
+        }
+      }
+      result.push(`${key}=${value}`);
+    } else {
+      result.push(line);
+    }
+  }
+  return result.join('\n');
+}
+
+export function stripYamlComments(content: string): string {
+  const lines = content.split('\n');
+  const result: string[] = [];
+  for (const line of lines) {
+    let processed = line;
+    let inString = false;
+    let stringChar = '';
+    let commentIndex = -1;
+    
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      
+      if (!inString && (char === '"' || char === "'")) {
+        inString = true;
+        stringChar = char;
+      } else if (inString && char === stringChar && line[i - 1] !== '\\') {
+        inString = false;
+      }
+      
+      if (!inString && char === '#') {
+        if (i === 0 || /\s/.test(line[i - 1])) {
+          commentIndex = i;
+          break;
+        }
+      }
+    }
+    
+    if (commentIndex >= 0) {
+      processed = line.slice(0, commentIndex).trimEnd();
+    }
+    
+    if (processed.trim() !== '') {
+      result.push(processed);
+    }
+  }
+  return result.join('\n');
+}
+
+export function stripComments(content: string, format: 'env' | 'yaml' | 'json' | 'text'): string {
+  switch (format) {
+    case 'env':
+      return stripEnvComments(content);
+    case 'yaml':
+      return stripYamlComments(content);
+    case 'json':
+      return content;
+    case 'text':
+      return content;
+    default:
+      return content;
+  }
+}
+
+export function isVaultReference(value: any, patterns?: string[]): boolean {
+  if (typeof value !== 'string') return false;
+  if (patterns && patterns.length > 0) {
+    return patterns.some(pattern => {
+      const regex = new RegExp(
+        pattern
+          .replace(/\./g, '\\.')
+          .replace(/\*/g, '.*')
+          .replace(/\{\{/g, '\\{\\{')
+          .replace(/\}\}/g, '\\}\\}')
+      );
+      return regex.test(value);
+    });
+  }
+  return /^\s*\{\{[\s\S]*\}\}\s*$/.test(value);
+}
+
+export function getVaultReferencePath(value: string): string | null {
+  const match = value.match(/\{\{\s*(?:vault\s*:)?\s*([^}\s]+)\s*\}\}/i);
+  if (match) {
+    return match[1];
+  }
+  return null;
+}
+
+export function normalizeVaultReferences(obj: any, patterns?: string[]): any {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+
+  if (typeof obj === 'string') {
+    if (isVaultReference(obj, patterns)) {
+      const refPath = getVaultReferencePath(obj);
+      if (refPath) {
+        return `{{vault:${refPath}}}`;
+      }
+    }
+    return obj;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(item => normalizeVaultReferences(item, patterns));
+  }
+
+  if (typeof obj === 'object') {
+    const result: Record<string, any> = {};
+    for (const key of Object.keys(obj)) {
+      result[key] = normalizeVaultReferences(obj[key], patterns);
+    }
+    return result;
+  }
+
+  return obj;
+}
+
+export function isExpectedPerEnvPath(
+  path: string,
+  expectedPaths?: { pathPattern: string; description?: string; allowedEnvironments?: string[] }[]
+): boolean {
+  if (!expectedPaths || expectedPaths.length === 0) return false;
+  return expectedPaths.some(ep => pathMatchesPattern(path, ep.pathPattern));
+}

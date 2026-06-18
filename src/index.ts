@@ -19,7 +19,11 @@ import {
 } from './baselineManager';
 import {
   generateEnvironmentReport,
-  generateSummaryReport
+  generateSummaryReport,
+  generateMatrixReport,
+  printMatrixConsoleReport,
+  exportMatrixJsonReport,
+  exportMatrixMarkdownReport
 } from './diffEngine';
 import {
   printConsoleReport,
@@ -349,6 +353,85 @@ program
       console.log('');
     } catch (error) {
       console.error(chalk.red(`获取配置源失败: ${error instanceof Error ? error.message : String(error)}`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('matrix')
+  .description('多环境矩阵化漂移比对')
+  .option('-e, --environments <envs>', '指定环境列表，逗号分隔，不指定则比对所有环境')
+  .option('-m, --mode <mode>', '比对模式: all(全量两两) | baseline(基线环境)', 'all')
+  .option('-b, --baseline-env <env>', '基线环境 (mode=baseline 时使用)')
+  .option('-l, --level <level>', '最低显示风险等级: critical|high|medium|low|info', 'info')
+  .option('-o, --output <path>', '输出报告到指定文件 (支持 .json 和 .md 格式)')
+  .option('-f, --format <format>', '输出格式: json|md|console', 'console')
+  .option('--show-expected', '显示预期环境差异 (expected-per-env)')
+  .option('--array-order-sensitive', '数组顺序敏感模式')
+  .option('--no-array-order-sensitive', '数组顺序不敏感模式 (默认)')
+  .action(async (cmdOpts) => {
+    try {
+      const options = program.opts();
+      const config = loadAppConfig(options.config);
+      
+      let environments = config.environments;
+      if (cmdOpts.environments) {
+        environments = cmdOpts.environments.split(',').map((e: string) => e.trim());
+      }
+      
+      if (environments.length < 2) {
+        console.log(chalk.red('矩阵比对需要至少 2 个环境'));
+        process.exit(1);
+      }
+      
+      let arrayOrderSensitive = config.arrayOrderSensitive ?? false;
+      if (cmdOpts.arrayOrderSensitive === true) {
+        arrayOrderSensitive = true;
+      }
+      if (cmdOpts.arrayOrderSensitive === false) {
+        arrayOrderSensitive = false;
+      }
+      
+      console.log(chalk.cyan(`\n正在抓取 ${environments.length} 个环境的配置快照...`));
+      console.log(chalk.gray(`环境: ${environments.join(', ')}`));
+      console.log(chalk.gray(`比对模式: ${cmdOpts.mode === 'baseline' ? '基线环境对比' : '全量两两比对'}`));
+      
+      const allSnapshots: any[] = [];
+      for (const env of environments) {
+        const snaps = await captureSnapshots(config.sources, env);
+        allSnapshots.push(...snaps);
+        console.log(`  [${env}] 抓取 ${snaps.length} 个快照`);
+      }
+      
+      if (allSnapshots.length === 0) {
+        console.log(chalk.red('未抓取到任何快照'));
+        process.exit(1);
+      }
+      
+      const matrixReport = generateMatrixReport(allSnapshots, {
+        sources: config.sources,
+        globalArrayOrderSensitive: arrayOrderSensitive,
+        compareMode: cmdOpts.mode as 'all' | 'baseline',
+        baselineEnvironment: cmdOpts.baselineEnv,
+        markExpectedDrifts: cmdOpts.showExpected
+      });
+      
+      const minLevel = (cmdOpts.level as RiskLevel) || 'info';
+      
+      if (cmdOpts.format === 'console' || !cmdOpts.output) {
+        printMatrixConsoleReport(matrixReport, minLevel);
+      }
+      
+      if (cmdOpts.output) {
+        const outputLower = cmdOpts.output.toLowerCase();
+        if (outputLower.endsWith('.json') || cmdOpts.format === 'json') {
+          exportMatrixJsonReport(matrixReport, cmdOpts.output);
+        } else if (outputLower.endsWith('.md') || cmdOpts.format === 'md') {
+          exportMatrixMarkdownReport(matrixReport, cmdOpts.output);
+        }
+      }
+    } catch (error) {
+      console.error(chalk.red(`矩阵比对失败: ${error instanceof Error ? error.message : String(error)}`));
       process.exit(1);
     }
   });

@@ -1,0 +1,53 @@
+# 生产环境应用配置
+# 最后更新: 2024-01-15
+# 维护者: ops-team
+
+app:
+  name: 电商平台  # 应用名称
+  version: "2.1.0" # 版本号
+  port: 8080
+  debug: false # 生产环境关闭debug
+
+database:
+  host: db-prod.example.com  # 数据库主机
+  port: 5432
+  name: ecommerce
+  pool:
+    min: 5
+    max: 20
+    idleTimeout: 30000  # 空闲超时30秒
+
+redis:
+  host: redis-prod.example.com
+  port: 6379
+  db: 0
+  cacheTTL: 3600
+
+security:
+  sessionTimeout: 1800
+  maxLoginAttempts: 5
+  passwordMinLength: 8
+  enable2FA: true
+  # apiKey: sk-xxxxxxx  # 已迁移到vault
+
+auth:
+  jwtSecret: "{{vault:prod/jwt/secret}}"  # vault引用
+  tokenExpiry: 3600
+  refreshTokenExpiry: 86400
+
+feature:
+  newCheckout: false
+  aiRecommend: true
+  darkMode: false
+  multiLanguage: true
+
+logging:
+  level: warn
+  filePath: /var/log/app.log
+  maxSize: 100MB
+  maxFiles: 10
+
+ui:
+  theme: light
+  pageSize: 20
+  defaultLanguage: zh-CN

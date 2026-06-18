@@ -1,0 +1,50 @@
+# 开发环境应用配置
+
+app:
+  name: 电商平台
+  version: "2.1.0"
+  port: 3000
+  debug: true
+
+database:
+  host: db-dev.local
+  port: 5432
+  name: ecommerce_dev
+  pool:
+    min: 2
+    max: 10
+    idleTimeout: 60000
+
+redis:
+  host: redis-dev.local
+  port: 6379
+  db: 1
+  cacheTTL: 1800
+
+security:
+  sessionTimeout: 3600
+  maxLoginAttempts: 10
+  passwordMinLength: 6
+  enable2FA: false
+
+auth:
+  jwtSecret: "{{vault:dev/jwt/secret}}"
+  tokenExpiry: 7200
+  refreshTokenExpiry: 604800
+
+feature:
+  newCheckout: true
+  aiRecommend: false
+  darkMode: true
+  multiLanguage: false
+
+logging:
+  level: debug
+  filePath: ./logs/app.log
+  maxSize: 10MB
+  maxFiles: 5
+
+ui:
+  theme: dark
+  pageSize: 10
+  defaultLanguage: zh-CN
